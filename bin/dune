@@ -1,0 +1,4 @@
+(executable
+ (public_name LL_Parser)
+ (name main)
+ (libraries LL_Parser))
