@@ -14,6 +14,23 @@ type cfg =
   ; prods : production
   }
 
+module Symbol = struct
+  type t = symbol
+
+  let key s =
+    match s with
+    | T s -> "T" ^ s
+    | N s -> "N" ^ s
+    | Epsilon -> "ε"
+    | EOF -> "$"
+  ;;
+
+  let compare s1 s2 = Stdlib.compare (key s1) (key s2)
+end
+
+module SymbolMap = Map.Make (Symbol)
+module SymbolSet = Set.Make (Symbol)
+
 let ( ==: ) a b = a, [ b ]
 let ( ||| ) (a, b) c = a, b @ [ c ]
 let empty_grammar = []
@@ -168,48 +185,53 @@ let eliminate_left_recur { nts; ts; start; prods } =
   *)
 let print_set prompt set =
   set
-  |> List.iter (fun (sym, sym_set) ->
+  |> SymbolMap.iter (fun sym sym_set ->
          print_string @@ prompt ^ "(" ^ string_of_symbol sym ^ ")";
          print_string "= { ";
-         sym_set |> List.map string_of_symbol |> String.concat ", " |> print_string;
+         sym_set
+         |> SymbolSet.elements
+         |> List.map string_of_symbol
+         |> String.concat ", "
+         |> print_string;
          print_string " }";
          print_newline ())
 ;;
 
-let print_first_set = print_set "first"
-let print_follow_set = print_set "follow"
-let update_set k v l = l |> List.remove_assoc k |> List.cons (k, v)
-let union_set s1 s2 = s1 @ s2 |> List.sort_uniq Stdlib.compare
+let print_first_set = print_set "First"
+let print_follow_set = print_set "Follow"
 
 let first cfg =
   let open List in
-  let first = ref [] in
-  cfg.ts @ [ EOF; Epsilon ] |> iter (fun ts -> first := cons (ts, [ ts ]) first.contents);
-  cfg.nts |> iter (fun nt -> first := cons (nt, []) first.contents);
+  let first = ref SymbolMap.empty in
+  let makeSet l = SymbolSet.(empty |> add_seq (List.to_seq l)) in
+  cfg.ts @ [ EOF; Epsilon ]
+  |> iter (fun ts -> first := SymbolMap.(first.contents |> add ts @@ makeSet [ ts ]));
+  cfg.nts |> iter (fun nt -> first := SymbolMap.(first.contents |> add nt @@ makeSet []));
   let changing = ref true in
   while changing.contents do
     changing := false;
     cfg.prods
     |> iteri (fun _ (symbol, prod) ->
            let rhs =
-             ref (first.contents |> assoc (hd prod) |> filter (fun x -> x <> Epsilon))
+             ref SymbolMap.(first.contents |> find (hd prod) |> SymbolSet.remove Epsilon)
            in
            let k = length prod in
            let break = ref false in
            let j = ref 0 in
            while j.contents < k - 1 && not break.contents do
-             let bj = first.contents |> assoc (nth prod j.contents) in
-             if not @@ mem Epsilon bj
-             then break := true
-             else rhs := rhs.contents |> append (filter (( <> ) Epsilon) bj)
+             let bj = SymbolMap.(first.contents |> find (nth prod j.contents)) in
+             if SymbolSet.mem Epsilon bj
+             then rhs := SymbolSet.(union rhs.contents bj |> remove Epsilon)
+             else break := true
            done;
-           let bk = assoc (nth prod (k - 1)) first.contents in
-           if j.contents = k - 1 && mem Epsilon bk then rhs := cons Epsilon rhs.contents;
-           let first_a = assoc symbol first.contents in
-           let old_size = length first_a in
-           let first_a = first_a @ rhs.contents |> sort_uniq Stdlib.compare in
-           let new_size = length first_a in
-           first := first.contents |> update_set symbol first_a;
+           let bk = SymbolMap.(first.contents |> find @@ nth prod (k - 1)) in
+           if j.contents = k - 1 && SymbolSet.exists (( = ) Epsilon) bk
+           then rhs := rhs.contents |> SymbolSet.add Epsilon;
+           let first_a = first.contents |> SymbolMap.find symbol in
+           let old_size = first_a |> SymbolSet.cardinal in
+           let first_a = SymbolSet.union first_a rhs.contents in
+           let new_size = SymbolSet.cardinal first_a in
+           first := first.contents |> SymbolMap.add symbol first_a;
            changing := changing.contents || old_size <> new_size)
   done;
   first.contents
@@ -218,31 +240,41 @@ let first cfg =
 let follow first cfg =
   let open List in
   let follow =
-    ref (cfg.nts |> map (fun nt -> if nt = cfg.start then nt, [ EOF ] else nt, []))
+    ref
+      SymbolMap.(
+        empty
+        |> add_seq
+             (cfg.nts
+             |> List.map (fun nt ->
+                    if nt = cfg.start
+                    then nt, SymbolSet.(empty |> add EOF)
+                    else nt, SymbolSet.empty)
+             |> List.to_seq))
   in
   let changing = ref true in
   while changing.contents do
     changing := false;
     cfg.prods
     |> List.iter (fun (a, prod) ->
-           let trailer = ref (assoc a follow.contents) in
+           let trailer = ref (follow.contents |> SymbolMap.find a) in
            prod
            |> List.rev
            |> List.iter (fun b ->
                   if mem b cfg.nts
                   then (
-                    let old_set = assoc b follow.contents in
-                    let new_set = union_set old_set trailer.contents in
-                    follow := follow.contents |> update_set b new_set;
+                    let old_set = follow.contents |> SymbolMap.find b in
+                    let new_set = SymbolSet.union old_set trailer.contents in
+                    follow := follow.contents |> SymbolMap.add b new_set;
                     changing
-                      := changing.contents || List.length old_set <> List.length new_set;
-                    let first_b = assoc b first in
-                    if mem Epsilon first_b
+                      := changing.contents
+                         || SymbolSet.cardinal old_set <> SymbolSet.cardinal new_set;
+                    let first_b = SymbolMap.find b first in
+                    if SymbolSet.mem Epsilon first_b
                     then
                       trailer
-                        := union_set trailer.contents (filter (( <> ) Epsilon) first_b)
+                        := SymbolSet.(union trailer.contents first_b |> remove Epsilon)
                     else trailer := first_b)
-                  else trailer := [ b ]))
+                  else trailer := SymbolSet.(empty |> add b)))
   done;
   follow.contents
 ;;
