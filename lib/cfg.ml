@@ -31,9 +31,18 @@ end
 module SymbolMap = Map.Make (Symbol)
 module SymbolSet = Set.Make (Symbol)
 
+let isNT = function
+  | N _ -> true
+  | _ -> false
+;;
+
+let isT = function
+  | T _ | EOF -> true
+  | _ -> false
+;;
+
 let ( ==: ) a b = a, [ b ]
 let ( ||| ) (a, b) c = a, b @ [ c ]
-let empty_grammar = []
 
 (* [cfg_of_grammar cfg] return the [cfg] records of the grammar *)
 let cfg_of_grammar (grammar : grammar) (entry : string) =
@@ -114,6 +123,13 @@ let string_of_cfg { nts = _; ts = _; start; prods } =
   |> String.concat "\n"
 ;;
 
+let string_of_a_prod prod =
+  let s, l = prod in
+  let lhs = string_of_symbol s in
+  let rhs = string_of_symbol_list l in
+  lhs ^ " -> " ^ rhs
+;;
+
 let new_name sym nts =
   let name = ref (string_of_symbol sym) in
   while List.mem (N name.contents) nts do
@@ -122,10 +138,7 @@ let new_name sym nts =
   name.contents
 ;;
 
-let has_left_recur sym bodys =
-  let recur, _ = List.partition (fun x -> List.hd x = sym) bodys in
-  recur <> []
-;;
+let has_left_recur sym bodys = List.exists (fun x -> List.hd x = sym) bodys
 
 let eliminate_direct_left_recursion sym bodys nts =
   let open List in
@@ -180,26 +193,27 @@ let eliminate_left_recur { nts; ts; start; prods } =
   { nts = nts.contents; ts; start; prods }
 ;;
 
-(* [first cfg] return the first set of [cfg].
-     require: [cfg] is LL(1)
-  *)
+let string_of_symbol_set sym_set =
+  "{ "
+  ^ (sym_set |> SymbolSet.elements |> List.map string_of_symbol |> String.concat ", ")
+  ^ " }"
+;;
+
 let print_set prompt set =
   set
   |> SymbolMap.iter (fun sym sym_set ->
          print_string @@ prompt ^ "(" ^ string_of_symbol sym ^ ")";
-         print_string "= { ";
-         sym_set
-         |> SymbolSet.elements
-         |> List.map string_of_symbol
-         |> String.concat ", "
-         |> print_string;
-         print_string " }";
+         print_string "= ";
+         print_string @@ string_of_symbol_set sym_set;
          print_newline ())
 ;;
 
 let print_first_set = print_set "First"
 let print_follow_set = print_set "Follow"
 
+(* [first cfg] return the first set of [cfg].
+     require: [cfg] is LL(1)
+  *)
 let first cfg =
   let open List in
   let first = ref SymbolMap.empty in
@@ -211,7 +225,7 @@ let first cfg =
   while changing.contents do
     changing := false;
     cfg.prods
-    |> iteri (fun _ (symbol, prod) ->
+    |> iter (fun (symbol, prod) ->
            let rhs =
              ref SymbolMap.(first.contents |> find (hd prod) |> SymbolSet.remove Epsilon)
            in
@@ -260,8 +274,8 @@ let follow first cfg =
            prod
            |> List.rev
            |> List.iter (fun b ->
-                  if mem b cfg.nts
-                  then (
+                  match mem b cfg.nts with
+                  | true ->
                     let old_set = follow.contents |> SymbolMap.find b in
                     let new_set = SymbolSet.union old_set trailer.contents in
                     follow := follow.contents |> SymbolMap.add b new_set;
@@ -273,8 +287,68 @@ let follow first cfg =
                     then
                       trailer
                         := SymbolSet.(union trailer.contents first_b |> remove Epsilon)
-                    else trailer := first_b)
-                  else trailer := SymbolSet.(empty |> add b)))
+                    else trailer := first_b
+                  | _ -> trailer := SymbolSet.(empty |> add b)))
   done;
   follow.contents
+;;
+
+let first_of_prod first l =
+  let rec first_of_prod_help acc = function
+    | [] -> acc
+    | x :: xs ->
+      let first_of_x = SymbolMap.find x first in
+      if SymbolSet.mem Epsilon first_of_x
+      then first_of_prod_help (SymbolSet.union first_of_x acc) xs
+      else SymbolSet.union first_of_x acc
+  in
+  first_of_prod_help SymbolSet.empty l
+;;
+
+module SymbolTuple = struct
+  type t = symbol * symbol
+
+  let compare (s1, s1') (s2, s2') =
+    match Stdlib.compare (Symbol.key s1) (Symbol.key s2) with
+    | 0 -> Stdlib.compare (Symbol.key s1') (Symbol.key s2')
+    | i -> i
+  ;;
+end
+
+module SymbolTupleMap = Map.Make (SymbolTuple)
+
+let pred_analysis_tb cfg first follow =
+  let rec helper l acc =
+    match l with
+    | [] -> acc
+    | (head, body) :: xs ->
+      let frp = first_of_prod first body in
+      let flp = SymbolMap.find head follow in
+      helper
+        xs
+        (acc
+        |> SymbolTupleMap.add_seq
+             (frp
+             |> SymbolSet.to_seq
+             |> Seq.filter isT
+             |> Seq.map (fun s -> (head, s), (head, body)))
+        |> SymbolTupleMap.add_seq
+             (if SymbolSet.mem Epsilon frp
+             then
+               flp
+               |> SymbolSet.to_seq
+               |> Seq.filter isT
+               |> Seq.map (fun s -> (head, s), (head, body))
+             else List.to_seq []))
+  in
+  helper cfg.prods SymbolTupleMap.empty
+;;
+
+let string_of_predict_analysis_tb tb =
+  tb
+  |> SymbolTupleMap.to_seq
+  |> Seq.map (fun ((n, t), bd) ->
+         string_of_symbol n ^ ", " ^ string_of_symbol t ^ " : " ^ string_of_a_prod bd)
+  |> List.of_seq
+  |> String.concat "\n"
 ;;
