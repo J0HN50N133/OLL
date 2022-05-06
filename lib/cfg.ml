@@ -324,22 +324,26 @@ let pred_analysis_tb cfg first follow =
     | (head, body) :: xs ->
       let frp = first_of_prod first body in
       let flp = SymbolMap.find head follow in
+      let add_producion set acc =
+        acc
+        |> SymbolTupleMap.add_seq
+             (set
+             |> SymbolSet.to_seq
+             |> Seq.filter isT
+             |> Seq.map (fun s ->
+                    ( (head, s)
+                    , match SymbolTupleMap.find_opt (head, s) acc with
+                      | Some l -> (head, body) :: l
+                      | None -> [ head, body ] )))
+      in
       helper
         xs
         (acc
-        |> SymbolTupleMap.add_seq
-             (frp
-             |> SymbolSet.to_seq
-             |> Seq.filter isT
-             |> Seq.map (fun s -> (head, s), (head, body)))
-        |> SymbolTupleMap.add_seq
-             (if SymbolSet.mem Epsilon frp
-             then
-               flp
-               |> SymbolSet.to_seq
-               |> Seq.filter isT
-               |> Seq.map (fun s -> (head, s), (head, body))
-             else List.to_seq []))
+        |> add_producion frp
+        |>
+        if SymbolSet.mem Epsilon frp
+        then add_producion flp
+        else add_producion SymbolSet.empty)
   in
   helper cfg.prods SymbolTupleMap.empty
 ;;
@@ -352,26 +356,27 @@ let surround_with tag attr x =
 
 let string_of_predict_analysis_tb cfg tb =
   let head_sym = cfg.ts @ [ EOF ] in
+  let th_el = surround_with "th" "style=\"border: 1px black solid;\"" in
+  let td_el = surround_with "td" "style=\"border: 1px black solid;\"" in
+  let tr_el = surround_with "tr" "style=\"border: 1px black solid;\"" in
+  let tb_el = surround_with "table" "style=\"border: 1px black solid;\"" in
+  let ( << ) f g x = x |> g |> f in
+  let ( >> ) f g = g << f in
+  let open List in
   let head =
-    surround_with "td" "" ""
-    ^ (head_sym
-      |> List.map (fun s ->
-             string_of_symbol s |> surround_with "th" "style=\"border: 1px black solid;\"")
-      |> String.concat "\n")
-    |> surround_with "tr" "style=\"border: 1px black solid;\""
+    td_el "" ^ (head_sym |> map (string_of_symbol >> th_el) |> String.concat "\n")
+    |> tr_el
   in
   let content =
     cfg.nts
-    |> List.map (fun nt ->
+    |> map (fun nt ->
            head_sym
-           |> List.map (fun t ->
-                  SymbolTupleMap.find_opt (nt, t) tb
-                  |> (fun p ->
-                       match p with
-                       | Some p -> string_of_a_prod p
-                       | _ -> "")
+           |> map (fun t ->
+                  (match SymbolTupleMap.find_opt (nt, t) tb with
+                  | Some p -> p |> map string_of_a_prod |> String.concat "</br>"
+                  | _ -> "")
                   |> surround_with "td" "style=\"border: 1px black solid;\"")
-           |> List.cons
+           |> cons
                 (surround_with
                    "td"
                    "style=\"border: 1px black solid;\""
@@ -380,5 +385,5 @@ let string_of_predict_analysis_tb cfg tb =
            |> surround_with "tr" "style=\"border: 1px black solid;\"")
     |> String.concat "\n"
   in
-  head ^ content |> surround_with "table" "style=\"border: 1px black solid;\""
+  head ^ content |> tb_el
 ;;

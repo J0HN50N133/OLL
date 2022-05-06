@@ -55,18 +55,17 @@ let cfg_left_recur =
   in
   cfg_of_grammar grammar "S"
 ;;*)
-let cfg =
-  let grammar =
-    [ "E" ==: "T E'"
-    ; "E'" ==: "+ T E'" ||| ""
-    ; "T" ==: "F T'"
-    ; "T'" ==: "* F T'" ||| ""
-    ; "F" ==: "( E )" ||| "id"
-    ]
-  in
-  cfg_of_grammar grammar "E"
-;;
 
+(*let grammar =*)
+(*[ "E" ==: "T E'"*)
+(*; "E'" ==: "+ T E'" ||| ""*)
+(*; "T" ==: "F T'"*)
+(*; "T'" ==: "* F T'" ||| ""*)
+(*; "F" ==: "( E )" ||| "id"*)
+(*]*)
+(*;;*)
+let grammar = [ "S" ==: "i E t S S'" ||| "a"; "S'" ==: "e S" ||| ""; "E" ==: "b" ]
+let cfg = cfg_of_grammar grammar "S"
 let cfg = cfg |> eliminate_left_recur
 let first = cfg |> first
 let follow = follow first cfg;;
@@ -74,5 +73,5 @@ let follow = follow first cfg;;
 let tb = pred_analysis_tb cfg first follow in
 (*print_first_set first;*)
 (*print_follow_set follow;*)
+(*print_string @@ string_of_predict_analysis_tb cfg tb*)
 print_string @@ string_of_predict_analysis_tb cfg tb
-(*print_string @@ string_of_predict_analysis_tb cfg tb;*)
