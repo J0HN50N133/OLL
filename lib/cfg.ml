@@ -132,10 +132,10 @@ let string_of_a_prod prod =
 
 let new_name sym nts =
   let name = ref (string_of_symbol sym) in
-  while List.mem (N name.contents) nts do
-    name := name.contents ^ "'"
+  while List.mem (N !name) nts do
+    name := !name ^ "'"
   done;
-  name.contents
+  !name
 ;;
 
 let has_left_recur sym bodys = List.exists (fun x -> List.hd x = sym) bodys
@@ -153,12 +153,12 @@ let eliminate_left_recur { nts; ts; start; prods } =
   let open List in
   let nts = ref nts in
   let bodys = ref (prods |> groupby fst |> map (fun x -> fst x, map snd (snd x))) in
-  let n = length bodys.contents in
+  let n = length !bodys in
   for i = 0 to n - 1 do
-    let ai, ai_prods = nth bodys.contents i in
+    let ai, ai_prods = nth !bodys i in
     let ai_prods_ref = ref ai_prods in
     for j = 0 to i - 1 do
-      let aj, aj_prods = nth bodys.contents j in
+      let aj, aj_prods = nth !bodys j in
       let recur, non_recur = ai_prods |> partition (fun x -> hd x = aj) in
       let replaced =
         recur
@@ -168,29 +168,26 @@ let eliminate_left_recur { nts; ts; start; prods } =
       in
       ai_prods_ref := replaced @ non_recur
     done;
-    if has_left_recur ai ai_prods_ref.contents
+    if has_left_recur ai !ai_prods_ref
     then (
       let new_name, replaced_recur, replaced_nonrecur =
-        eliminate_direct_left_recursion ai ai_prods_ref.contents nts.contents
+        eliminate_direct_left_recursion ai !ai_prods_ref !nts
       in
-      nts := cons (N new_name) nts.contents;
+      nts := cons (N new_name) !nts;
       bodys
-        := bodys.contents
+        := !bodys
            |> mapi (fun k item -> if i = k then ai, replaced_nonrecur else item)
            |> fun x -> append x [ N new_name, replaced_recur ])
-    else
-      bodys
-        := bodys.contents
-           |> mapi (fun k item -> if i = k then ai, ai_prods_ref.contents else item)
+    else bodys := !bodys |> mapi (fun k item -> if i = k then ai, !ai_prods_ref else item)
   done;
   let prods =
-    bodys.contents (* symbol * symbol list list *)
+    !bodys (* symbol * symbol list list *)
     |> map (fun (sym, sym_list_list) ->
            sym_list_list |> map (fun sym_list -> sym, sym_list))
     |> concat
     (* (symbol * symbol list) list *)
   in
-  { nts = nts.contents; ts; start; prods }
+  { nts = !nts; ts; start; prods }
 ;;
 
 let string_of_symbol_set sym_set =
@@ -219,36 +216,36 @@ let first cfg =
   let first = ref SymbolMap.empty in
   let makeSet l = SymbolSet.(empty |> add_seq (List.to_seq l)) in
   cfg.ts @ [ EOF; Epsilon ]
-  |> iter (fun ts -> first := SymbolMap.(first.contents |> add ts @@ makeSet [ ts ]));
-  cfg.nts |> iter (fun nt -> first := SymbolMap.(first.contents |> add nt @@ makeSet []));
+  |> iter (fun ts -> first := SymbolMap.(!first |> add ts @@ makeSet [ ts ]));
+  cfg.nts |> iter (fun nt -> first := SymbolMap.(!first |> add nt @@ makeSet []));
   let changing = ref true in
-  while changing.contents do
+  while !changing do
     changing := false;
     cfg.prods
     |> iter (fun (symbol, prod) ->
            let rhs =
-             ref SymbolMap.(first.contents |> find (hd prod) |> SymbolSet.remove Epsilon)
+             ref SymbolMap.(!first |> find (hd prod) |> SymbolSet.remove Epsilon)
            in
            let k = length prod in
            let break = ref false in
            let j = ref 0 in
-           while j.contents < k - 1 && not break.contents do
-             let bj = SymbolMap.(first.contents |> find (nth prod j.contents)) in
+           while !j < k - 1 && not !break do
+             let bj = SymbolMap.(!first |> find (nth prod !j)) in
              if SymbolSet.mem Epsilon bj
-             then rhs := SymbolSet.(union rhs.contents bj |> remove Epsilon)
+             then rhs := SymbolSet.(union !rhs bj |> remove Epsilon)
              else break := true
            done;
-           let bk = SymbolMap.(first.contents |> find @@ nth prod (k - 1)) in
-           if j.contents = k - 1 && SymbolSet.exists (( = ) Epsilon) bk
-           then rhs := rhs.contents |> SymbolSet.add Epsilon;
-           let first_a = first.contents |> SymbolMap.find symbol in
+           let bk = SymbolMap.(!first |> find @@ nth prod (k - 1)) in
+           if !j = k - 1 && SymbolSet.exists (( = ) Epsilon) bk
+           then rhs := !rhs |> SymbolSet.add Epsilon;
+           let first_a = !first |> SymbolMap.find symbol in
            let old_size = first_a |> SymbolSet.cardinal in
-           let first_a = SymbolSet.union first_a rhs.contents in
+           let first_a = SymbolSet.union first_a !rhs in
            let new_size = SymbolSet.cardinal first_a in
-           first := first.contents |> SymbolMap.add symbol first_a;
-           changing := changing.contents || old_size <> new_size)
+           first := !first |> SymbolMap.add symbol first_a;
+           changing := !changing || old_size <> new_size)
   done;
-  first.contents
+  !first
 ;;
 
 let follow first cfg =
@@ -266,31 +263,29 @@ let follow first cfg =
              |> List.to_seq))
   in
   let changing = ref true in
-  while changing.contents do
+  while !changing do
     changing := false;
     cfg.prods
     |> List.iter (fun (a, prod) ->
-           let trailer = ref (follow.contents |> SymbolMap.find a) in
+           let trailer = ref (!follow |> SymbolMap.find a) in
            prod
            |> List.rev
            |> List.iter (fun b ->
                   match mem b cfg.nts with
                   | true ->
-                    let old_set = follow.contents |> SymbolMap.find b in
-                    let new_set = SymbolSet.union old_set trailer.contents in
-                    follow := follow.contents |> SymbolMap.add b new_set;
+                    let old_set = !follow |> SymbolMap.find b in
+                    let new_set = SymbolSet.union old_set !trailer in
+                    follow := !follow |> SymbolMap.add b new_set;
                     changing
-                      := changing.contents
+                      := !changing
                          || SymbolSet.cardinal old_set <> SymbolSet.cardinal new_set;
                     let first_b = SymbolMap.find b first in
                     if SymbolSet.mem Epsilon first_b
-                    then
-                      trailer
-                        := SymbolSet.(union trailer.contents first_b |> remove Epsilon)
+                    then trailer := SymbolSet.(union !trailer first_b |> remove Epsilon)
                     else trailer := first_b
                   | _ -> trailer := SymbolSet.(empty |> add b)))
   done;
-  follow.contents
+  !follow
 ;;
 
 let first_of_prod first l =
@@ -350,8 +345,8 @@ let pred_analysis_tb cfg first follow =
 
 let surround_with tag attr x =
   match x with
-  | "" -> "<" ^ tag ^ " " ^ attr ^ "/>"
-  | _ -> "<" ^ tag ^ " " ^ attr ^ ">\n" ^ x ^ "\n</" ^ tag ^ ">"
+  | "" -> "<" ^ tag ^ " " ^ attr ^ "/>\n"
+  | _ -> "<" ^ tag ^ " " ^ attr ^ ">" ^ x ^ "</" ^ tag ^ ">\n"
 ;;
 
 let string_of_predict_analysis_tb cfg tb =
