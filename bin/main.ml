@@ -22,32 +22,32 @@ let cfg_left_recur =
     cfg_of_grammar grammar "S")
 ;;
 *)
-(*let cfg =*)
-(*let grammar =*)
-(*[ "program" ==: "compoundstmt"*)
-(*; "stmt" ==: "ifstmt" ||| "whilestmt" ||| "assgstmt" ||| "compoundstmt"*)
-(*; "compoundstmt" ==: "{ stmts }"*)
-(*; "stmts" ==: "stmt stmts" ||| ""*)
-(*; "ifstmt" ==: "if ( boolexpr ) then stmt else stmt"*)
-(*; "whilestmt" ==: "while ( boolexpr ) stmt"*)
-(*; "assgstmt" ==: "ID = arithexpr ;"*)
-(*; "boolexpr" ==: "arithexpr boolop arithexpr"*)
-(*; "boolop" ==: "<" ||| ">" ||| "<=" ||| ">=" ||| "=="*)
-(*; "arithexpr" ==: "multexpr arithexprprime"*)
-(*; "arithexprprime"*)
-(*==: "+ multexpr arithexprprime"*)
-(*||| "- multexpr arithexprprime"*)
-(*||| ""*)
-(*; "multexpr" ==: "simpleexpr multexprprime"*)
-(*; "multexprprime"*)
-(*==: "* simpleexpr multexprprime"*)
-(*||| "/ simpleexpr multexprprime"*)
-(*||| ""*)
-(*; "simpleexpr" ==: "ID" ||| "NUM" ||| "( arithexpr )"*)
-(*]*)
-(*in*)
-(*cfg_of_grammar grammar "program"*)
-(*;;*)
+(*let cfg =
+  let grammar =
+    [ "program" ==: "compoundstmt"
+    ; "stmt" ==: "ifstmt" ||| "whilestmt" ||| "assgstmt" ||| "compoundstmt"
+    ; "compoundstmt" ==: "{ stmts }"
+    ; "stmts" ==: "stmt stmts" ||| ""
+    ; "ifstmt" ==: "if ( boolexpr ) then stmt else stmt"
+    ; "whilestmt" ==: "while ( boolexpr ) stmt"
+    ; "assgstmt" ==: "ID = arithexpr ;"
+    ; "boolexpr" ==: "arithexpr boolop arithexpr"
+    ; "boolop" ==: "<" ||| ">" ||| "<=" ||| ">=" ||| "=="
+    ; "arithexpr" ==: "multexpr arithexprprime"
+    ; "arithexprprime"
+      ==: "+ multexpr arithexprprime"
+      ||| "- multexpr arithexprprime"
+      ||| ""
+    ; "multexpr" ==: "simpleexpr multexprprime"
+    ; "multexprprime"
+      ==: "* simpleexpr multexprprime"
+      ||| "/ simpleexpr multexprprime"
+      ||| ""
+    ; "simpleexpr" ==: "ID" ||| "NUM" ||| "( arithexpr )"
+    ]
+  in
+  cfg_of_grammar grammar "program"
+;;*)
 
 (*let cfg =
   let grammar =
@@ -67,13 +67,12 @@ let cfg =
   cfg_of_grammar grammar "E"
 ;;
 
-let _ =
-  let cfg = cfg |> eliminate_left_recur in
-  let first = cfg |> first in
-  let follow = follow first cfg in
-  let tb = pred_analysis_tb cfg first follow in
-  print_first_set first;
-  print_follow_set follow;
-  print_string @@ string_of_predict_analysis_tb tb;
-  ()
-;;
+let cfg = cfg |> eliminate_left_recur
+let first = cfg |> first
+let follow = follow first cfg;;
+
+let tb = pred_analysis_tb cfg first follow in
+(*print_first_set first;*)
+(*print_follow_set follow;*)
+print_string @@ string_of_predict_analysis_tb cfg tb
+(*print_string @@ string_of_predict_analysis_tb cfg tb;*)

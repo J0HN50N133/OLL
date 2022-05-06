@@ -127,7 +127,7 @@ let string_of_a_prod prod =
   let s, l = prod in
   let lhs = string_of_symbol s in
   let rhs = string_of_symbol_list l in
-  lhs ^ " -> " ^ rhs
+  lhs ^ " 🠖 " ^ rhs
 ;;
 
 let new_name sym nts =
@@ -344,11 +344,41 @@ let pred_analysis_tb cfg first follow =
   helper cfg.prods SymbolTupleMap.empty
 ;;
 
-let string_of_predict_analysis_tb tb =
-  tb
-  |> SymbolTupleMap.to_seq
-  |> Seq.map (fun ((n, t), bd) ->
-         string_of_symbol n ^ ", " ^ string_of_symbol t ^ " : " ^ string_of_a_prod bd)
-  |> List.of_seq
-  |> String.concat "\n"
+let surround_with tag attr x =
+  match x with
+  | "" -> "<" ^ tag ^ " " ^ attr ^ "/>"
+  | _ -> "<" ^ tag ^ " " ^ attr ^ ">\n" ^ x ^ "\n</" ^ tag ^ ">"
+;;
+
+let string_of_predict_analysis_tb cfg tb =
+  let head_sym = cfg.ts @ [ EOF ] in
+  let head =
+    surround_with "td" "" ""
+    ^ (head_sym
+      |> List.map (fun s ->
+             string_of_symbol s |> surround_with "th" "style=\"border: 1px black solid;\"")
+      |> String.concat "\n")
+    |> surround_with "tr" "style=\"border: 1px black solid;\""
+  in
+  let content =
+    cfg.nts
+    |> List.map (fun nt ->
+           head_sym
+           |> List.map (fun t ->
+                  SymbolTupleMap.find_opt (nt, t) tb
+                  |> (fun p ->
+                       match p with
+                       | Some p -> string_of_a_prod p
+                       | _ -> "")
+                  |> surround_with "td" "style=\"border: 1px black solid;\"")
+           |> List.cons
+                (surround_with
+                   "td"
+                   "style=\"border: 1px black solid;\""
+                   (string_of_symbol nt))
+           |> String.concat "\n"
+           |> surround_with "tr" "style=\"border: 1px black solid;\"")
+    |> String.concat "\n"
+  in
+  head ^ content |> surround_with "table" "style=\"border: 1px black solid;\""
 ;;
