@@ -41,7 +41,7 @@ let isT = function
   | _ -> false
 ;;
 
-let ( ==: ) a b = a, [ b ]
+let ( ==> ) a b = a, [ b ]
 let ( ||| ) (a, b) c = a, b @ [ c ]
 
 (* [cfg_of_grammar cfg] return the [cfg] records of the grammar *)
