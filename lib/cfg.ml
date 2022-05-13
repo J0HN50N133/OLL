@@ -100,7 +100,7 @@ let string_of_symbol = function
 ;;
 
 let string_of_symbol_list (l : symbol list) =
-  l |> List.map string_of_symbol |> String.concat ""
+  l |> List.map string_of_symbol |> String.concat " "
 ;;
 
 let string_of_cfg { nts = _; ts = _; start; prods } =
@@ -233,10 +233,11 @@ let first cfg =
              let bj = SymbolMap.(!first |> find (nth prod !j)) in
              if SymbolSet.mem Epsilon bj
              then rhs := SymbolSet.(union !rhs bj |> remove Epsilon)
-             else break := true
+             else break := true;
+             j := !j + 1
            done;
            let bk = SymbolMap.(!first |> find @@ nth prod (k - 1)) in
-           if !j = k - 1 && SymbolSet.exists (( = ) Epsilon) bk
+           if !j = k - 1 && SymbolSet.mem Epsilon bk
            then rhs := !rhs |> SymbolSet.add Epsilon;
            let first_a = !first |> SymbolMap.find symbol in
            let old_size = first_a |> SymbolSet.cardinal in
