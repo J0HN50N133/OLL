@@ -133,7 +133,7 @@ let string_of_a_prod prod =
 let new_name sym nts =
   let name = ref (string_of_symbol sym) in
   while List.mem (N !name) nts do
-    name := !name ^ "'"
+    name := !name ^ "_"
   done;
   !name
 ;;
@@ -313,6 +313,10 @@ end
 
 module SymbolTupleMap = Map.Make (SymbolTuple)
 
+(* [pred_analysis_tb cfg first follow] return the predict analysis table
+   of the [cfg]
+   require: [cfg] is LL
+ *)
 let pred_analysis_tb cfg first follow =
   let rec helper l acc =
     match l with
