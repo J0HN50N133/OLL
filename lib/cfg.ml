@@ -228,19 +228,19 @@ let first cfg =
            in
            let k = length prod in
            let break = ref false in
-           let j = ref 0 in
-           while !j < k - 1 && not !break do
+           let j = ref 1 in
+           while !j < k && not !break do
+             let b_j_1 = SymbolMap.(!first |> find (nth prod (!j - 1))) in
              let bj = SymbolMap.(!first |> find (nth prod !j)) in
-             if SymbolSet.mem Epsilon bj
-             then rhs := SymbolSet.(union !rhs bj |> remove Epsilon)
+             if SymbolSet.mem Epsilon b_j_1
+             then rhs := SymbolSet.(union !rhs (bj |> remove Epsilon))
              else break := true;
              j := !j + 1
            done;
            let bk = SymbolMap.(!first |> find @@ nth prod (k - 1)) in
-           if !j = k - 1 && SymbolSet.mem Epsilon bk
-           then rhs := !rhs |> SymbolSet.add Epsilon;
+           if !j = k && SymbolSet.mem Epsilon bk then rhs := !rhs |> SymbolSet.add Epsilon;
            let first_a = !first |> SymbolMap.find symbol in
-           let old_size = first_a |> SymbolSet.cardinal in
+           let old_size = SymbolSet.cardinal first_a in
            let first_a = SymbolSet.union first_a !rhs in
            let new_size = SymbolSet.cardinal first_a in
            first := !first |> SymbolMap.add symbol first_a;
