@@ -290,15 +290,17 @@ let follow first cfg =
 ;;
 
 let first_of_prod first l =
-  let rec first_of_prod_help acc = function
-    | [] -> acc
+  let rec first_of_prod_help acc_set have_Ep = function
+    | [] -> if have_Ep then acc_set else SymbolSet.remove Epsilon acc_set
     | x :: xs ->
       let first_of_x = SymbolMap.find x first in
-      if SymbolSet.mem Epsilon first_of_x
-      then first_of_prod_help (SymbolSet.union first_of_x acc) xs
-      else SymbolSet.union first_of_x acc
+      let x_has_Ep = SymbolSet.mem Epsilon first_of_x in
+      if have_Ep
+      then
+        first_of_prod_help (SymbolSet.union first_of_x acc_set) (have_Ep && x_has_Ep) xs
+      else SymbolSet.remove Epsilon acc_set
   in
-  first_of_prod_help SymbolSet.empty l
+  first_of_prod_help SymbolSet.empty true l
 ;;
 
 module SymbolTuple = struct
